@@ -1,0 +1,12 @@
+molecule: hydrogen
+voc_enum: H2
+model_type: PLSRegression
+n_components: 5
+wavelength_range:
+- 350.0
+- 830.0
+wavelength_resolution: 0.3
+unit: ppm
+trained_at: '2026-03-23'
+training_experiment_ids: []
+notes: "Dummy model for development \u2014 random data, not for production use"

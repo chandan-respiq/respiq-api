@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  prediction-api:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - ./models:/app/models:ro
+    env_file:
+      - .env
+    networks:
+      - app-network
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=app-network
+      - traefik.http.routers.respiq-api.rule=Host(`${API_DOMAIN}`)
+      - traefik.http.routers.respiq-api.entrypoints=websecure
+      - traefik.http.routers.respiq-api.tls=true
+      - traefik.http.routers.respiq-api.tls.certresolver=letsencrypt
+      - traefik.http.services.respiq-api.loadbalancer.server.port=8000
+
+  traefik:
+    image: traefik:v2.11
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=${TRAEFIK_ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/certificates/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-certificates:/certificates
+    networks:
+      - app-network
+
+volumes:
+  traefik-certificates:
+
+networks:
+  app-network:
+    driver: bridge
