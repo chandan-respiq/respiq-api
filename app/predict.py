@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 from app.schemas import PredictionResponse
 
+_MIN_CONCENTRATION = 1e-4
+
 
 def from_row(data: dict[str, float], molecule: str, bundle: dict) -> PredictionResponse:
     """Predict from a single preprocessed (ratio-corrected) spectral row."""
@@ -16,6 +18,7 @@ def from_row(data: dict[str, float], molecule: str, bundle: dict) -> PredictionR
 
     X = np.array([[data[c] for c in wavelength_cols]])
     concentration = float(bundle["model"].predict(X).ravel()[0])
+    concentration = max(concentration, _MIN_CONCENTRATION)
     return PredictionResponse(
         molecule=molecule,
         concentration=round(concentration, 4),
@@ -81,6 +84,7 @@ def from_raw_csv(csv_bytes: bytes, molecule: str, bundle: dict) -> PredictionRes
 
     X = mean_spectrum[np.newaxis, :]
     concentration = float(bundle["model"].predict(X).ravel()[0])
+    concentration = max(concentration, _MIN_CONCENTRATION)
     return PredictionResponse(
         molecule=molecule,
         concentration=round(concentration, 4),
