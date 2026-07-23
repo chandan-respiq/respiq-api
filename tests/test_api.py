@@ -19,7 +19,11 @@ _pls.fit(_X, _y)
 DUMMY_BUNDLE = {
     "model": _pls,
     "wavelength_cols": DUMMY_WAVELENGTH_COLS,
-    "spec": {"unit": "ppb", "model_type": "PLSRegression"},
+    "spec": {
+        "unit": "ppb",
+        "model_type": "PLSRegression",
+        "wavelength_range": [350.0, 351.2],
+    },
 }
 
 
@@ -110,13 +114,45 @@ def test_predict_unknown_molecule(client):
     assert resp.status_code == 404
 
 
-# 8. Raw endpoint with real sample file → 501
-def test_predict_raw_not_implemented(client):
-    sample = "tests/sample_data/AVS_2025-11-12_10-56-43.csv"
-    with open(sample, "rb") as f:
-        resp = client.post(
-            f"/predict/{DUMMY_MOLECULE}/raw",
-            files={"file": f},
-            headers={"Authorization": f"Bearer {VALID_TOKEN}"},
-        )
-    assert resp.status_code == 501
+# 8. Raw endpoint
+def test_predict_raw(client):
+    csv_bytes = (
+        b"Time,350.0,350.3,350.6,350.9,351.2,Ticks\n"
+        b"0,1,2,3,4,5,10\n"
+        b"1,3,4,5,6,7,11\n"
+    )
+    resp = client.post(
+        f"/predict/{DUMMY_MOLECULE}/raw",
+        files={"file": ("spectrum.csv", csv_bytes, "text/csv")},
+        headers={"Authorization": f"Bearer {VALID_TOKEN}"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["molecule"] == DUMMY_MOLECULE
+    assert isinstance(body["concentration"], float)
+    assert body["unit"] == "ppb"
+
+
+def test_predict_raw_averages_native_wavelengths_in_model_range():
+    from app.predict import from_raw_csv
+
+    class RecordingModel:
+        def predict(self, X):
+            self.X = X
+            return np.array([12.34567])
+
+    model = RecordingModel()
+    bundle = {
+        "model": model,
+        "spec": {"unit": "ppb", "wavelength_range": [350.0, 350.7]},
+    }
+    csv_bytes = (
+        b"Time,349.9,350.3,350.7,Ticks\n"
+        b"0,1.0,2.0,3.0,10\n"
+        b"1,3.0,4.0,5.0,11\n"
+    )
+
+    result = from_raw_csv(csv_bytes, DUMMY_MOLECULE, bundle)
+
+    np.testing.assert_allclose(model.X, [[3.0, 4.0]])
+    assert result.concentration == 12.3457

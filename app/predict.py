@@ -1,4 +1,7 @@
+import io
+
 import numpy as np
+import pandas as pd
 from app.schemas import PredictionResponse
 
 
@@ -27,15 +30,59 @@ def from_raw_csv(csv_bytes: bytes, molecule: str, bundle: dict) -> PredictionRes
     - Columns: Time (ms), TimeAbs, <~2048 float wavelength columns>, Ticks
     - Wavelength range: ~296.6 nm to ~855.9 nm
 
-    TODO: replace NotImplementedError with the respiq preprocessing call, e.g.:
-        from respiq.workflows import preprocess_raw
-        df = pd.read_csv(io.BytesIO(csv_bytes))
-        X = preprocess_raw(df, bundle["wavelength_cols"])
-        concentration = float(bundle["model"].predict(X).ravel()[0])
-        return PredictionResponse(
-            molecule=molecule,
-            concentration=round(concentration, 4),
-            unit=bundle["spec"]["unit"],
-        )
+    Native AVS wavelength columns within the model's configured range are
+    averaged across all measurement rows to produce one spectrum.
     """
-    raise NotImplementedError("Raw preprocessing not yet implemented.")
+    try:
+        df = pd.read_csv(io.BytesIO(csv_bytes))
+    except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError) as e:
+        raise ValueError("Could not parse the uploaded CSV file.") from e
+
+    if df.empty:
+        raise ValueError("The uploaded CSV contains no spectral rows.")
+
+    try:
+        wavelength_min, wavelength_max = map(
+            float, bundle["spec"]["wavelength_range"]
+        )
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError("The model contains an invalid wavelength range.") from e
+
+    if (
+        not np.all(np.isfinite([wavelength_min, wavelength_max]))
+        or wavelength_min >= wavelength_max
+    ):
+        raise ValueError("The model contains an invalid wavelength range.")
+
+    raw_wavelength_columns: list[tuple[str, float]] = []
+    for column in df.columns:
+        try:
+            wavelength = float(column)
+        except (TypeError, ValueError):
+            continue
+        if wavelength_min <= wavelength <= wavelength_max:
+            raw_wavelength_columns.append((column, wavelength))
+
+    if not raw_wavelength_columns:
+        raise ValueError(
+            f"The uploaded CSV has no wavelength columns in the configured "
+            f"range {wavelength_min:g}-{wavelength_max:g}."
+        )
+
+    raw_wavelength_columns.sort(key=lambda item: item[1])
+    wavelength_columns = [
+        column for column, _wavelength in raw_wavelength_columns
+    ]
+
+    spectral_values = df[wavelength_columns].apply(pd.to_numeric, errors="coerce")
+    mean_spectrum = spectral_values.mean(axis=0).to_numpy(dtype=float)
+    if not np.all(np.isfinite(mean_spectrum)):
+        raise ValueError("One or more wavelength columns contain no valid readings.")
+
+    X = mean_spectrum[np.newaxis, :]
+    concentration = float(bundle["model"].predict(X).ravel()[0])
+    return PredictionResponse(
+        molecule=molecule,
+        concentration=round(concentration, 4),
+        unit=bundle["spec"]["unit"],
+    )
