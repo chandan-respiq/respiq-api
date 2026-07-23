@@ -14,7 +14,7 @@ from sklearn.cross_decomposition import PLSRegression
 MODELS_DIR = Path("models")
 MODELS_DIR.mkdir(exist_ok=True)
 
-WL_MIN, WL_MAX, WL_STEP = 350.0, 830.0, 0.3
+WL_MIN, WL_MAX, WL_STEP = 350.0, 878.0, 0.3
 N_SAMPLES = 50
 N_COMPONENTS = 5
 RANDOM_SEED = 42
