@@ -7,6 +7,6 @@ wavelength_range:
 - 830.0
 wavelength_resolution: 0.3
 unit: ppb
-trained_at: '2026-03-23'
+trained_at: '2026-07-23'
 training_experiment_ids: []
 notes: "Dummy model for development \u2014 random data, not for production use"

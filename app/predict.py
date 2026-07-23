@@ -1,4 +1,6 @@
+from curses import raw
 import io
+import wave
 
 import numpy as np
 import pandas as pd
@@ -37,7 +39,6 @@ def from_raw_csv(csv_bytes: bytes, molecule: str, bundle: dict) -> PredictionRes
         df = pd.read_csv(io.BytesIO(csv_bytes))
     except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError) as e:
         raise ValueError("Could not parse the uploaded CSV file.") from e
-
     if df.empty:
         raise ValueError("The uploaded CSV contains no spectral rows.")
 
@@ -73,7 +74,6 @@ def from_raw_csv(csv_bytes: bytes, molecule: str, bundle: dict) -> PredictionRes
     wavelength_columns = [
         column for column, _wavelength in raw_wavelength_columns
     ]
-
     spectral_values = df[wavelength_columns].apply(pd.to_numeric, errors="coerce")
     mean_spectrum = spectral_values.mean(axis=0).to_numpy(dtype=float)
     if not np.all(np.isfinite(mean_spectrum)):
